@@ -4,10 +4,7 @@
 #------------------------------------------------------------------------------
 terraform {
   backend "s3" {
-    bucket  = "cwp-np-security-vault-terraform-state-bucket"
-    encrypt = true
-    key     = "vault-np/terraform.tfstate"
-    region  = "us-west-2"
+ 
   }
 }
 
