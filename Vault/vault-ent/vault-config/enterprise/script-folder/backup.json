@@ -1,0 +1,9 @@
+{
+    "interval": "8h",
+    "retain": 15,
+    "path_prefix": "/nonprod/vault/snapshots/",
+    "storage_type": "aws-s3",
+    "aws_s3_bucket": "cwp-np-security-vault-backup-bucket-yendlbgavqlbrt1y",
+    "aws_s3_region": "us-west-2"
+  }
+  

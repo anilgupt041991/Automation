@@ -1,0 +1,11 @@
+{{- if hasKey .Values "mode" }}
+  {{ fail "mode is not supported anymore, please remove it from your release and use replicaCount instead." }}
+{{- end }}
+
+{{- if .Values.replicaCount }}
+  {{- if kindIs "int64" .Values.replicaCount -}}
+  {{- if eq .Values.replicaCount 3 }}
+    {{ fail "Kyverno does not support running with 2 replicas. For a highly-available deployment, select 3 replicas or for standalone select 1 replica." }}
+  {{- end }}
+  {{- end }}
+{{- end }}

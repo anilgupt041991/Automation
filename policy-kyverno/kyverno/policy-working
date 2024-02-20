@@ -1,0 +1,16 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: strategic-merge-patch
+spec:
+  failurePolicy: Ignore
+  rules:
+  - name: enableServiceLinks_false_globally
+    match:
+      resources:
+        kinds:
+        - Pod
+    mutate:
+      patchStrategicMerge:
+        spec:
+          enableServiceLinks: false

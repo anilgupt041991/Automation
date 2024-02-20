@@ -1,0 +1,46 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": [
+                "arn:aws:iam::225496172645:role/project-prod-create-read-update-role",
+                "arn:aws:iam::225496172645:role/project-prod-delete-role",
+                
+                "arn:aws:iam::884415979304:role/project-prod-create-read-update-role",
+                "arn:aws:iam::884415979304:role/project-prod-delete-role",
+
+                "arn:aws:iam::337407722147:role/project-prod-create-read-update-role",
+                "arn:aws:iam::337407722147:role/project-prod-delete-role",
+
+                "arn:aws:iam::884415979304:role/project-prod-create-read-update-role",
+                "arn:aws:iam::884415979304:role/project-prod-delete-role",
+
+                "arn:aws:iam::333444061123:role/project-prod-create-read-update-role",
+                "arn:aws:iam::333444061123:role/project-prod-delete-role",
+
+                "arn:aws:iam::510689667769:role/project-np-create-read-update-role",
+                "arn:aws:iam::510689667769:role/project-np-delete-role",
+
+                "arn:aws:iam::090717643658:role/project-np-create-read-update-role",
+                "arn:aws:iam::090717643658:role/project-np-delete-role",
+
+                "arn:aws:iam::060838874158:role/project-np-create-read-update-role",
+                "arn:aws:iam::060838874158:role/project-np-delete-role",
+
+                "arn:aws:iam::938761194405:role/project-np-create-read-update-role",
+                "arn:aws:iam::938761194405:role/project-np-delete-role",
+
+                "arn:aws:iam::477076530842:role/project-np-create-read-update-role",
+                "arn:aws:iam::477076530842:role/project-np-delete-role",
+
+                "arn:aws:iam::304816588275:role/project-np-create-read-update-role",
+                "arn:aws:iam::304816588275:role/project-np-delete-role",
+
+                "arn:aws:iam::841615347185:role/project-np-create-read-update-role",
+                "arn:aws:iam::841615347185:role/project-np-delete-role"
+            ]
+        }
+    ]
+}

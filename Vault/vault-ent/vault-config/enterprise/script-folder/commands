@@ -1,0 +1,235 @@
+####New Start
+#Terraform service account Role_id Secret_id
+vault write auth/approle/login role_id="a2f6be3c-5352-62eb-459e-c0a8cdae5e27" \
+    secret_id="cb6d0e55-4327-3dd8-a3f8-0d6c69f3b6ea"
+
+Token Terraform admin: hvs.CAESILOdlK3ASOztEb3ZpvAnJ0GFPf6SlkEBos_RfxgZLnJkGiAKHGh2cy5RdDhDcVl3UHVkTjlQMUg5U1NiZG9sR1IQcg
+
+hvs.CAESICMbOg26fTNOmtxkMIEO40ubDwBoMEsfFh22nev3Edg0GigKImh2cy5vSUFnbzQ2Qk1FM1U2UU1TdmtIZlJnT1guY0h5YlUQoMQC
+
+#Below working CURL will work from inside the VPC Dev eks cluster.
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIJDqO6v3Od9ITp-M19tS34WlmHcKRa9OO32EnUrrNAAxGiEKHGh2cy5SM1RheUtkZHg1REJLSmxpaE0ySVpSc3oQ91U" \
+    -H "X-Vault-Namespace: development/platform_tenant" \
+    -X DELETE \
+    https://https://us-zsense.zscwp.io:8300/v1/kv/data/abasset
+curl  \
+    -H "X-Vault-Token: hvs.CAESIDWsqr4gpm3MsAFFr6xKNouF3vUcjYNXMLrmIvMXHufhGiIKHGh2cy5jUGdvMVQ3VThnd0l0Y3E2dEo5YVNHeDQQmNQD" \
+    -X GET 
+    -H "X-Vault-Namespace: development/platform_common" \
+    https://https://us-zsense.zscwp.io:8300/v1/kv/data/ops
+
+
+#Agent install
+helm install vault hashicorp/vault \
+    --set "injector.externalVaultAddr=https://us-zsense.zscwp.io:8300/"
+
+curl--insecure \
+    --request POST \
+    --data '{"password": "terr@zscaler"}' \
+    https://us-zsense.zscwp.io:8300/v1/auth/userpass/login/vault-sa-admin
+
+Go inside the pod
+vault write auth/kubernetes/config -namespace="development" \
+     token_reviewer_jwt="$TOKEN_REVIEW_JWT" \
+     kubernetes_host="$KUBE_HOST" \
+     kubernetes_ca_cert="$KUBE_CA_CERT" \
+     issuer="https://kubernetes.default.svc.cluster.local"
+
+
+
+
+#  # Testing Int-subsystem-role
+
+curl --insecure \
+    --request POST \
+    --data '{"role_id":"91468883-6ee9-544e-3169-d0d57287e5a4","secret_id":"ZGY1N2Q4MTUtYWQxNC0zMDQyLTY5ZDEtYjU1NWRkNjAxZDU4"}' \
+    -H "X-Vault-Namespace: development/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login
+
+Token : hvs.CAESIGAkowd-147TQrn-O_9HKdYSMseBjbLkcSj8miHiDTZ8GigKImh2cy5XeXVodHlaOE56UkJ2UG5TMW5iUWJJUHEuY0h5YlUQy8UB
+
+#Read
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESINQ36EYEWnIXOhYCORvgL2K-M-7xHUuru7Gke_yW1HFYGicKImh2cy5yb1VyOXJhOHVMZHh3SnJFNHNUdjJ2QW8ubkRKQU8Q2gU" \
+    -X GET \
+    -H "X-Vault-Namespace: development/platform_tenant" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/anil
+
+#write
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIIqjn1mPJLBAT9XBhemnM8bn7l-4JKhxvyOLncPBw-uqGigKImh2cy5XSjdNTjc0dWRleUUxTERMRmxIbGhZa0EuY0h5YlUQk8YB" \
+    -H "X-Vault-Namespace: development/platform_common" \
+    -X POST \
+    -d '{"data":{"value":"bar111"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/integrations
+
+
+
+curl  --insecure \
+    --header "X-Vault-Token: hvs.CAESIJluEtWzlWke8YhU7cUamGDxOz1EatVObfcQXtcoA6cBGicKImh2cy5Ob3lqSXlKSFQ1dExJc0ZFSmVwblRyc3guOEpOQjkQiEg" \
+    --header "X-Vault-Namespace: integration/tenant" \
+    --header "Content-Type: application/merge-patch+json" \
+    --request PATCH \
+    -d '{"data":{"value":"bar111-atched-1"}}' \
+    https://us-zsense.zscwp.io:8300/v1/kv/data/integrations
+
+curl  --insecure \
+   --header "X-Vault-Token: hvs.CAESIJluEtWzlWke8YhU7cUamGDxOz1EatVObfcQXtcoA6cBGicKImh2cy5Ob3lqSXlKSFQ1dExJc0ZFSmVwblRyc3guOEpOQjkQiEg" \
+   --header "X-Vault-Namespace: integration/tenant" \
+   --header "Content-Type: application/merge-patch+json" \
+   --request PATCH \
+   --data '{"data":{"patch2":"patching1"}}' \ \
+   https://us-zsense.zscwp.io:8300/v1/kv/data/integrations
+
+
+
+#  # Testing int-subsystem-customer-role
+
+#Get token
+curl --insecure \
+    --request POST \
+    --data '{"role_id":"24ed8c27-55e1-cc1f-2e15-e0e33dd23f12","secret_id":"1b49fba5-2ddc-bc12-41c6-a8e29709898e"}' \
+    -H "X-Vault-Namespace: integration/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login
+
+#GET
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIN9QkJZH9Rg5IQK7C7q8OxGIe1XZ2fHyL8xBX-XW93fSGiEKHGh2cy5RSVJMNE1hTk1CcnNWcVp5ek9rOEVSUEcQ5QQ" \
+    -X GET \
+    -H "X-Vault-Namespace: development/platform_tenant" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/ztecauqail
+#  # Testing int-onboarding-role
+Get Token
+curl --insecure \
+    --request POST \
+    --data '{"role_id":"59dd54d5-d58a-6c24-50d1-d2c1be00d47c","secret_id":"1592778c-9c39-0b73-8879-823dd3c7d39a"}' \
+    -H "X-Vault-Namespace: integration/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login
+
+hvs.CAESILZ94IGiQRoD780xiZzQ-cdc0jyA3nJ23Sh3Hja7T8wmGigKImh2cy5UbUtwa1NXTGpieDVjQks3T25WVDZXa0cuOEpOQjkQw8sB
+#Read
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESINQxj-AxYtRhDr_Yu2Qxmtu5lYwGYIsY3ZLRp9A9CApwGicKImh2cy5ha09ETWNLUmx0dDEzcU1lbFlERjQ4SlkuOEpOQjkQiEk" \
+    -X GET \
+    -H "X-Vault-Namespace: integration/platform_tenant" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/acmeacmesonsaugust-tenant-secrets/neo4j/admin_password
+
+
+
+#write
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIJKSYZSaNvrzNUwzLn6bd26UV7FQ2dyzFRQOntF_DD5rGigKImh2cy43MjVybFZSUUs2T2lPWnJmNjlDR1dkdkYuOEpOQjkQ9MoC" \
+    -H "X-Vault-Namespace: integration/platform_tenant" \
+    -X POST \
+    -d '{"data":{"valuetest111":"oboarding"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/acmeacmesonsaugust-tenant-secrets/neo4j/admin_password
+
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIDdBG8gno25ESvLIq6L-HG-qo0J-ih7NRFta7NTlOOA6GiIKHGh2cy5XYVZyZUlvczUybFhqSGRFNlFZZnI2UkQQ1NwD" \
+    -X GET \
+    -H "X-Vault-Namespace: development" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/platform_common/airflow
+     
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIDdBG8gno25ESvLIq6L-HG-qo0J-ih7NRFta7NTlOOA6GiIKHGh2cy5XYVZyZUlvczUybFhqSGRFNlFZZnI2UkQQ1NwD" \
+    -X GET \
+    -H "X-Vault-Namespace: development" \
+     https://us-zsense.zscwp.io:8300/v1/development/kv/data/platform_common/airflow
+
+
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESINQxj-AxYtRhDr_Yu2Qxmtu5lYwGYIsY3ZLRp9A9CApwGicKImh2cy5ha09ETWNLUmx0dDEzcU1lbFlERjQ4SlkuOEpOQjkQiEk" \
+    -H "X-Vault-Namespace: integration/tenant-customer" \
+    -X POST \
+    -d '{"data":{"value":"oboarding-tentant-cusomer"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/aws
+
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESINQxj-AxYtRhDr_Yu2Qxmtu5lYwGYIsY3ZLRp9A9CApwGicKImh2cy5ha09ETWNLUmx0dDEzcU1lbFlERjQ4SlkuOEpOQjkQiEk" \
+    -X GET \
+    -H "X-Vault-Namespace: integration/tenant-customer" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/aws
+
+
+
+
+
+#SCALE-Testing Env
+#SCale-Onboarding role
+#Get Token
+curl --insecure \
+    --request POST \
+    --data '{"role_id":"72b27ebc-4132-f9ce-751e-572cf78e3f8b","secret_id":"50e347a0-40cc-a7b2-7e2d-395be0d9d5d3"}' \
+    -H "X-Vault-Namespace: scale/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login
+
+hvs.CAESIKI7_w8Hbj0Pa-sgGPoxrsG4Xz0Y9XKCm5Qi1wNnhkFwGicKImh2cy54MzByZmRxMmdvRTJVZG0wRTZ3emVVbnMucUNxM3IQykk
+
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIKI7_w8Hbj0Pa-sgGPoxrsG4Xz0Y9XKCm5Qi1wNnhkFwGicKImh2cy54MzByZmRxMmdvRTJVZG0wRTZ3emVVbnMucUNxM3IQykk" \
+    -H "X-Vault-Namespace: scale/platform" \
+    -X POST \
+    -d '{"data":{"value":"sacle-oboarding"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/subsystems
+
+curl  \
+    -H "X-Vault-Token: " \
+    -X GET \
+    -H "X-Vault-Namespace: scale/platform" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/subsystems
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIKI7_w8Hbj0Pa-sgGPoxrsG4Xz0Y9XKCm5Qi1wNnhkFwGicKImh2cy54MzByZmRxMmdvRTJVZG0wRTZ3emVVbnMucUNxM3IQykk" \
+    -H "X-Vault-Namespace: scale/tenant-customer" \
+    -X POST \
+    -d '{"data":{"value":"sacle-oboardingaws"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/aws
+    
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESIKI7_w8Hbj0Pa-sgGPoxrsG4Xz0Y9XKCm5Qi1wNnhkFwGicKImh2cy54MzByZmRxMmdvRTJVZG0wRTZ3emVVbnMucUNxM3IQykk" \
+    -X GET \
+    -H "X-Vault-Namespace: scale/tenant-customer" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/aws
+
+
+Testing: Dev Onboarding
+curl  \
+    --request POST \
+    --data '{"role_id":"253d3e23-ee1f-98e6-178e-0f0d28f06906","secret_id":"65b90201-7b44-8e84-7553-4bf14a7dcfa4"}' \
+    -H "X-Vault-Namespace: development/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login
+
+Token: hvs.CAESIJNUKb1ijy6dYjO4NaHaHzP791waI_-PsXnF9Nb7Nc69GicKImh2cy43bkYzc0hzbldzM293MnMycUM1T2J2OTUuY0h5YlUQzlU
+
+curl  \
+    -H "X-Vault-Token: hvs.CAESICyIw3wG_HK5mjxoon57qr30PLAVjnyYzS9sCmdlthQtGicKImh2cy5zSXVIVkxGdUhMcERXTEdOZkNhTDJhY0cuY0h5YlUQo1Y" \
+    -H "X-Vault-Namespace: development/tenant" \
+    -X POST \
+    -d '{"data":{"value":"oboarding123"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/subsystems
+
+
+
+curl --insecure \
+    -H "X-Vault-Token: hvs.CAESICyIw3wG_HK5mjxoon57qr30PLAVjnyYzS9sCmdlthQtGicKImh2cy5zSXVIVkxGdUhMcERXTEdOZkNhTDJhY0cuY0h5YlUQo1Y" \
+    -X GET \
+    -H "X-Vault-Namespace: development/tenant" \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/integrations
+
+curl  \
+    -H "X-Vault-Token: hvs.CAESIEZ_fTq1Egg6FBvwobYvOhBsU9lcSDLf5_94KSJZGJ9kGicKImh2cy5EaUhPdFpyMmdCeVU0d1VRdTZtRFdnRU4uY0h5YlUQ91o" \
+    -H "X-Vault-Namespace: development/platform" \
+    -X POST \
+    -d '{"data":{"value":"test1"}}' \
+     https://us-zsense.zscwp.io:8300/v1/kv/data/common
+
+curl  \
+    --request POST \
+    --data '{"role_id":"253d3e23-ee1f-98e6-178e-0f0d28f06906","secret_id":"cda28b06-8025-3d0f-a0e1-1663af4dbfcb"}' \
+    -H "X-Vault-Namespace: development/" \
+    https://us-zsense.zscwp.io:8300/v1/auth/approle/login

@@ -1,0 +1,48 @@
+# Create Service account Username and password for Terraform to use.
+vault login $root_token
+vault auth enable userpass
+vault policy write sre-admins sre-admin.hcl
+vault write auth/userpass/users/sre-sa-admin \
+    token_ttl=660 \
+    password=sre@zscaler  \
+    policies=sre-admins
+
+#Manual After Terraform is run its created role 
+# Vault login as Username and Password Password stored in Google docs, Create a github action secrets at orglevel for Password and consume it in githubrunner actions
+vault login -method=userpass username=vault-sa-admin
+
+1.Get the  secret_id(32 days) and Role_id(Never expires) for csp onboarding  roles
+CSP_ONBOARDING_VAULT_ROLE_ID=$(vault read -namespace=zpccustomer auth/approle/role/csp-onboarding/role-id -format=json | jq -r '.data.role_id')
+CSP_ONBOARDING_VAULT_SECRET_ID=$(vault write -force -namespace=zpccustomer auth/approle/role/csp-onboarding/secret-id -format=json | jq -r '.data.secret_id')
+
+2. Get secret_id and Role_id for each of the Tenant-onboarding permission same as csp-onboarding
+CSP_ONBOARDING_VAULT_ROLE_ID=$(vault read -namespace=zpccustomer auth/approle/role/csp-onboarding/role-id -format=json | jq -r '.data.role_id')
+CSP_ONBOARDING_VAULT_SECRET_ID=$(vault write -force -namespace=zpccustomer auth/approle/role/csp-onboarding/secret-id -format=json | jq -r '.data.secret_id')
+
+3.Get  secret_id and Role_id for each of the Tenant-offboarding permission
+TENANT_OFFBOARDING_ROLE_ID=$(vault read -namespace=zpccustomer auth/approle/role/tenant-offboarding/role-id -format=json | jq -r '.data.role_id')
+TENANT_OFFBOARDING_SECRET_ID=$(vault write -force -namespace=zpccustomer auth/approle/role/tenant-offboarding/secret-id -format=json | jq -r '.data.secret_id')
+
+3.Get  secret_id and Role_id for readonly
+TENANT_READONLY_VAULT_ROLE_ID=$(vault read -namespace=zpccustomer auth/approle/role/tenant-readonly/role-id -format=json | jq -r '.data.role_id')
+TENANT_READONLY_VAULT_SECRET_ID=$(vault write -force -namespace=zpccustomer auth/approle/role/tenant-offboarding/secret-id -format=json | jq -r '.data.secret_id')
+
+
+4. Get secret_id and Role_id for Platoform readonly
+SCLA_PLATFORM_TENANT_READONLY_VAULT_ROLE_ID=$(vault read -namespace=zpcplatform auth/approle/role/platorm-tenant-readonly/role-id -format=json | jq -r '.data.role_id')
+SCLAE_PLATFORM_TENANT_READONLY_VAULT_SECRET_ID=$(vault write -force -namespace=zpcplatform auth/approle/role/platorm-tenant-readonly/secret-id -format=json | jq -r '.data.secret_id')
+
+5.Get  secret_id and Role_id for Platoform platorm-csp-onboarding
+PLATFORM_CSP_ONBOARDING_VAULT_ROLE_ID=$(vault read -namespace=zpcplatform auth/approle/role/platorm-csp-onboarding/role-id -format=json | jq -r '.data.role_id')
+PLATFORM_CSP_ONBOARDIN_VAULT_SECRET_ID=$(vault write -force -namespace=zpcplatform auth/approle/role/platorm-csp-onboarding/secret-id -format=json | jq -r '.data.secret_id')
+
+# Secret_id=90 days
+# Role_id>>>IMAGE/AMI/config
+# Secret_id>>>1.Eks secrets and mount on pod no (eks job to change ): Risk if EKS get exposed to its get expoed.
+#             2.Github repo secrets>>>Rotation /https://careers.appian.com/blog/the-tech-corner/automate-code-signing-with-vault-app-roles/
+#             3.API to AWS secrets manager(SM and keep it in cache): APi call to SM and i can Update SM using an Automation
+
+# Push >>> Secrets and manager 
+# POD>>>making a call to SM and then when secrets upated pod needs to have retry logic.
+# Pull>>>github repo as secrets 
+

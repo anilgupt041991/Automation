@@ -1,0 +1,598 @@
+# Policy like Disallow all secrets Disallow-capabilities,Disallow-host-namespaces,Disallow-host-path,Disallow-host-ports,Disallow-host-process,Disallow-privileged-containers,Disallow-proc-mount,Disallow-selinux,Restrict-apparmor-profiles,Restrict-seccomp,Restrict-sysctls  are install by default bu using helm install kyverno-policies kyverno/kyverno-policies --namespace kyverno
+# Below are some other policy which we need to install using Githubactions
+
+# Add Default Resources
+#Pods which don't specify at least resource requests are assigned a QoS class of BestEffort which can hog resources for other Pods on Nodes. At a minimum, all Pods should specify resource requests in order to be labeled as the QoS class Burstable. This sample mutates any container in a Pod which doesn't specify memory or cpu requests to apply some sane defaults.
+
+apiVersion : kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-resources
+  annotations:
+    policies.kyverno.io/title: Add Default Resources
+    policies.kyverno.io/category: Other
+    policies.kyverno.io/severity: medium
+    kyverno.io/kyverno-version: 1.6.0
+    policies.kyverno.io/minversion: 1.6.0
+    kyverno.io/kubernetes-version: "1.23"
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Pods which don't specify at least resource requests are assigned a QoS class
+      of BestEffort which can hog resources for other Pods on Nodes. At a minimum,
+      all Pods should specify resource requests in order to be labeled as the QoS
+      class Burstable. This sample mutates any container in a Pod which doesn't
+      specify memory or cpu requests to apply some sane defaults.      
+spec:
+  background: false
+  rules:
+  - name: add-default-requests
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    preconditions:
+      any:
+      - key: "{{request.operation}}"
+        operator: In
+        value:
+        - CREATE
+        - UPDATE
+    mutate:
+      patchStrategicMerge:
+        spec:
+          containers:
+            - (name): "*"
+              resources:
+                requests:
+                  +(memory): "100Mi"
+                  +(cpu): "100m"
+---
+#Require imagePullPolicy Always
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: imagepullpolicy-always
+  annotations:
+    policies.kyverno.io/title: Require imagePullPolicy Always
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      If the `latest` tag is allowed for images, it is a good idea to have the
+      imagePullPolicy field set to `Always` to ensure should that tag be overwritten that future
+      pulls will get the updated image. This policy validates the imagePullPolicy is set to `Always`
+      when the `latest` tag is specified explicitly or where a tag is not defined at all.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: imagepullpolicy-always
+    match:
+      resources:
+        kinds:
+        - Pod
+    validate:
+      message: >-
+                The imagePullPolicy must be set to `Always` when the tag `latest` is used.
+      pattern:
+        spec:
+          containers:
+          - (image): "*:latest | !*:*"
+            imagePullPolicy: "Always"
+---
+#Require PodDisruptionBudget
+#PodDisruptionBudget resources are useful to ensuring minimum availability is maintained at all times. This policy checks all incoming Deployments to ensure they have a matching, preexisting PodDisruptionBudget.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pdb
+  annotations:
+    policies.kyverno.io/title: Require PodDisruptionBudget
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/minversion: 1.3.6
+    policies.kyverno.io/subject: Deployment, PodDisruptionBudget
+    policies.kyverno.io/description: >-
+      PodDisruptionBudget resources are useful to ensuring minimum availability
+      is maintained at all times. This policy checks all incoming Deployments
+      to ensure they have a matching, preexisting PodDisruptionBudget.      
+spec:
+  validationFailureAction: audit
+  background: false
+  rules:
+  - name: require-pdb
+    match:
+      resources:
+        kinds:
+        - Deployment
+    preconditions:
+      any:
+      - key: "{{request.operation}}"
+        operator: Equals
+        value: CREATE
+    context:
+    - name: pdb_count
+      apiCall:
+        urlPath: "/apis/policy/v1beta1/namespaces/{{request.namespace}}/poddisruptionbudgets"
+        jmesPath: "items[?label_match(spec.selector.matchLabels, `{{request.object.spec.template.metadata.labels}}`)] | length(@)"
+    validate:
+      message: "There is no corresponding PodDisruptionBudget found for this Deployment."
+      deny:
+        conditions:
+          any:
+          - key: "{{pdb_count}}"
+            operator: LessThan
+            value: 1
+---
+# Disallow Default Namespace
+#Kubernetes Namespaces are an optional feature that provide a way to segment and isolate cluster resources across multiple applications and users. As a best practice, workloads should be isolated with Namespaces. Namespaces should be required and the default (empty) Namespace should not be used. This policy validates that Pods specify a Namespace name other than `default`.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-default-namespace
+  annotations:
+    pod-policies.kyverno.io/autogen-controllers: none
+    policies.kyverno.io/title: Disallow Default Namespace
+    policies.kyverno.io/category: Multi-Tenancy
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Kubernetes Namespaces are an optional feature that provide a way to segment and
+      isolate cluster resources across multiple applications and users. As a best
+      practice, workloads should be isolated with Namespaces. Namespaces should be required
+      and the default (empty) Namespace should not be used. This policy validates that Pods
+      specify a Namespace name other than `default`.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: validate-namespace
+    match:
+      resources:
+        kinds:
+        - Pod
+    validate:
+      message: "Using 'default' namespace is not allowed."
+      pattern:
+        metadata:
+          namespace: "!default"
+  - name: validate-podcontroller-namespace
+    match:
+      resources:
+        kinds:
+        - DaemonSet
+        - Deployment
+        - Job
+        - StatefulSet
+    validate:
+      message: "Using 'default' namespace is not allowed for pod controllers."
+      pattern:
+        metadata:
+          namespace: "!default"
+---
+#Require Multiple Replicas
+#Deployments with a single replica cannot be highly available and thus the application may suffer downtime if that one replica goes down. This policy validates that Deployments have more than one replica.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deployment-has-multiple-replicas
+  annotations:
+    policies.kyverno.io/title: Require Multiple Replicas
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Deployment
+    policies.kyverno.io/description: >-
+      Deployments with a single replica cannot be highly available and thus the application
+      may suffer downtime if that one replica goes down. This policy validates that Deployments
+      have more than one replica.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: deployment-has-multiple-replicas
+      match:
+        resources:
+          kinds:
+          - Deployment
+      validate:
+        message: "Deployments should have more than one replica to ensure availability."
+        pattern:
+          spec:
+            replicas: ">1"
+---
+#Disallow Secrets from Env Vars
+#Secrets used as environment variables containing sensitive information may, if not carefully controlled, be printed in log output which could be visible to unauthorized people and captured in forwarding applications. This policy disallows using Secrets as environment variables.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: secrets-not-from-env-vars
+  annotations:
+    policies.kyverno.io/title: Disallow Secrets from Env Vars
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod, Secret
+    policies.kyverno.io/description: >-
+      Secrets used as environment variables containing sensitive information may, if not carefully controlled, 
+      be printed in log output which could be visible to unauthorized people and captured in forwarding
+      applications. This policy disallows using Secrets as environment variables.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: secrets-not-from-env-vars
+    match:
+      resources:
+        kinds:
+        - Pod
+    validate:
+      message: "Secrets must be mounted as volumes, not as environment variables."
+      pattern:
+        spec:
+          containers:
+          - name: "*"
+            =(env):
+            - =(valueFrom):
+                X(secretKeyRef): "null"
+  - name: secrets-not-from-envfrom
+    match:
+      resources:
+        kinds:
+        - Pod
+    validate:
+      message: "Secrets must not come from envFrom statements."
+      pattern:
+        spec:
+          containers:
+          - name: "*"
+            =(envFrom):
+            - X(secretRef): "null"
+---
+#Require Limits and Requests
+#As application workloads share cluster resources, it is important to limit resources requested and consumed by each Pod. It is recommended to require resource requests and limits per Pod, especially for memory and CPU. If a Namespace level request or limit is specified, defaults will automatically be applied to each Pod based on the LimitRange configuration. This policy validates that all containers have something specified for memory and CPU requests and memory limits.
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-requests-limits
+  annotations:
+    policies.kyverno.io/title: Require Limits and Requests
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      As application workloads share cluster resources, it is important to limit resources
+      requested and consumed by each Pod. It is recommended to require resource requests and
+      limits per Pod, especially for memory and CPU. If a Namespace level request or limit is specified,
+      defaults will automatically be applied to each Pod based on the LimitRange configuration.
+      This policy validates that all containers have something specified for memory and CPU
+      requests and memory limits.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: validate-resources
+    match:
+      resources:
+        kinds:
+        - Pod
+    validate:
+      message: "CPU and memory resource requests and limits are required."
+      pattern:
+        spec:
+          containers:
+          - resources:
+              requests:
+                memory: "?*"
+                cpu: "?*"
+              limits:
+                memory: "?*"
+---
+#Require runAsNonRoot
+#Containers must be required to run as non-root users. This policy ensures `runAsNonRoot` is set to `true`. A known issue prevents a policy such as this using `anyPattern` from being persisted properly in Kubernetes 1.23.0-1.23.2.
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-nonroot
+  annotations:
+    policies.kyverno.io/title: Require runAsNonRoot
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    kyverno.io/kyverno-version: 1.6.0
+    kyverno.io/kubernetes-version: "1.22-1.23"
+    policies.kyverno.io/description: >-
+      Containers must be required to run as non-root users. This policy ensures
+      `runAsNonRoot` is set to `true`. A known issue prevents a policy such as this
+      using `anyPattern` from being persisted properly in Kubernetes 1.23.0-1.23.2.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: >-
+          Running as root is not allowed. Either the field spec.securityContext.runAsNonRoot
+          must be set to `true`, or the fields spec.containers[*].securityContext.runAsNonRoot,
+          spec.initContainers[*].securityContext.runAsNonRoot, and spec.ephemeralContainers[*].securityContext.runAsNonRoot
+          must be set to `true`.          
+        anyPattern:
+        - spec:
+            securityContext:
+              runAsNonRoot: true
+            =(ephemeralContainers):
+            - =(securityContext):
+                =(runAsNonRoot): true
+            =(initContainers):
+            - =(securityContext):
+                =(runAsNonRoot): true
+            containers:
+            - =(securityContext):
+                =(runAsNonRoot): true
+        - spec:
+            =(ephemeralContainers):
+            - securityContext:
+                runAsNonRoot: true
+            =(initContainers):
+            - securityContext:
+                runAsNonRoot: true
+            containers:
+            - securityContext:
+                runAsNonRoot: true
+---
+#Require runAsNonRoot
+#Containers must be required to run as non-root users. This policy ensures `runAsNonRoot` is set to `true`. A known issue prevents a policy such as this using `anyPattern` from being persisted properly in Kubernetes 1.23.0-1.23.2.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-nonroot
+  annotations:
+    policies.kyverno.io/title: Require runAsNonRoot
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    kyverno.io/kyverno-version: 1.6.0
+    kyverno.io/kubernetes-version: "1.22-1.23"
+    policies.kyverno.io/description: >-
+      Containers must be required to run as non-root users. This policy ensures
+      `runAsNonRoot` is set to `true`. A known issue prevents a policy such as this
+      using `anyPattern` from being persisted properly in Kubernetes 1.23.0-1.23.2.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: >-
+          Running as root is not allowed. Either the field spec.securityContext.runAsNonRoot
+          must be set to `true`, or the fields spec.containers[*].securityContext.runAsNonRoot,
+          spec.initContainers[*].securityContext.runAsNonRoot, and spec.ephemeralContainers[*].securityContext.runAsNonRoot
+          must be set to `true`.          
+        anyPattern:
+        - spec:
+            securityContext:
+              runAsNonRoot: true
+            =(ephemeralContainers):
+            - =(securityContext):
+                =(runAsNonRoot): true
+            =(initContainers):
+            - =(securityContext):
+                =(runAsNonRoot): true
+            containers:
+            - =(securityContext):
+                =(runAsNonRoot): true
+        - spec:
+            =(ephemeralContainers):
+            - securityContext:
+                runAsNonRoot: true
+            =(initContainers):
+            - securityContext:
+                runAsNonRoot: true
+            containers:
+            - securityContext:
+                runAsNonRoot: true
+---
+#Disallow Privilege Escalation
+#Privilege escalation, such as via set-user-ID or set-group-ID file mode, should not be allowed. This policy ensures the `allowPrivilegeEscalation` field is set to `false`.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privilege-escalation
+  annotations:
+    policies.kyverno.io/title: Disallow Privilege Escalation
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    kyverno.io/kyverno-version: 1.6.0
+    kyverno.io/kubernetes-version: "1.22-1.23"
+    policies.kyverno.io/description: >-
+      Privilege escalation, such as via set-user-ID or set-group-ID file mode, should not be allowed.
+      This policy ensures the `allowPrivilegeEscalation` field is set to `false`.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: privilege-escalation
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      validate:
+        message: >-
+          Privilege escalation is disallowed. The fields
+          spec.containers[*].securityContext.allowPrivilegeEscalation,
+          spec.initContainers[*].securityContext.allowPrivilegeEscalation,
+          and spec.ephemeralContainers[*].securityContext.allowPrivilegeEscalation
+          must be set to `false`.          
+        pattern:
+          spec:
+            =(ephemeralContainers):
+            - securityContext:
+                allowPrivilegeEscalation: "false"
+            =(initContainers):
+            - securityContext:
+                allowPrivilegeEscalation: "false"
+            containers:
+            - securityContext:
+                allowPrivilegeEscalation: "false"
+---
+#Disallow Service Type LoadBalancer
+#Especially in cloud provider environments, a Service having type LoadBalancer will cause the provider to respond by creating a load balancer somewhere in the customer account. This adds cost and complexity to a deployment. Without restricting this ability, users may easily overrun established budgets and security practices set by the organization. This policy restricts use of the Service type LoadBalancer.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: no-loadbalancer-service
+  annotations:
+    policies.kyverno.io/title: Disallow Service Type LoadBalancer
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Service
+    policies.kyverno.io/description: >-
+      Especially in cloud provider environments, a Service having type LoadBalancer will cause the
+      provider to respond by creating a load balancer somewhere in the customer account. This adds
+      cost and complexity to a deployment. Without restricting this ability, users may easily
+      overrun established budgets and security practices set by the organization. This policy restricts
+      use of the Service type LoadBalancer.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: no-LoadBalancer
+    match:
+      resources:
+        kinds:
+        - Service
+    validate:
+      message: "Service of type LoadBalancer is not allowed."
+      pattern:
+        spec:
+          type: "!LoadBalancer"
+---
+#Require imagePullSecrets
+#Some registries, both public and private, require credentials in order to pull images from them. This policy checks those images and if they come from a registry other than ghcr.io or quay.io an `imagePullSecret` is required.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-imagepullsecrets
+  annotations:
+    policies.kyverno.io/title: Require imagePullSecrets
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/minversion: 1.3.5
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Some registries, both public and private, require credentials in order to pull images
+      from them. This policy checks those images and if they come from a registry
+      other than ghcr.io or quay.io an `imagePullSecret` is required.      
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+  - name: check-for-image-pull-secrets
+    match:
+      resources:
+        kinds:
+        - Pod
+    preconditions:
+      all:
+      - key: "{{ images.containers.*.registry }}"
+        operator: NotIn
+        value:
+        - ghcr.io
+        - quay.io
+    validate:
+      message: "An `imagePullSecret` is required when pulling from this registry."
+      pattern:
+        spec:
+          imagePullSecrets:
+          - name: "?*"
+---
+#Add Labels
+#Labels are used as an important source of metadata describing objects in various ways or triggering other functionality. Labels are also a very basic concept and should be used throughout Kubernetes. This policy performs a simple mutation which adds a label `foo=bar` to Pods, Services, ConfigMaps, and Secrets.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-labels
+  annotations:
+    policies.kyverno.io/title: Add Labels
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Label
+    policies.kyverno.io/description: >-
+      Labels are used as an important source of metadata describing objects in various ways
+      or triggering other functionality. Labels are also a very basic concept and should be
+      used throughout Kubernetes. This policy performs a simple mutation which adds a label
+      `foo=bar` to Pods, Services, ConfigMaps, and Secrets.      
+spec:
+  rules:
+  - name: add-labels
+    match:
+      resources:
+        kinds:
+        - Pod
+        - Service
+        - ConfigMap
+        - Secret
+    mutate:
+      patchStrategicMerge:
+        metadata:
+          labels:
+            foo: bar
+---
+#Block Pod Exec by Namespace Label
+#The `exec` command may be used to gain shell access, or run other commands, in a Pod's container. While this can be useful for troubleshooting purposes, it could represent an attack vector and is discouraged. This policy blocks Pod exec commands based upon a Namespace label `exec=false`.
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-exec-by-namespace-label
+  annotations:
+    policies.kyverno.io/title: Block Pod Exec by Namespace Label
+    policies.kyverno.io/category: Sample
+    policies.kyverno.io/minversion: 1.4.2
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      The `exec` command may be used to gain shell access, or run other commands, in a Pod's container. While this can
+      be useful for troubleshooting purposes, it could represent an attack vector and is discouraged.
+      This policy blocks Pod exec commands based upon a Namespace label `exec=false`.      
+spec:
+  validationFailureAction: audit
+  background: false
+  rules:
+  - name: deny-exec-by-ns-label
+    match:
+      resources:
+        kinds:
+        - PodExecOptions
+    context:
+    - name: nslabelexec
+      apiCall:
+        urlPath: "/api/v1/namespaces/{{request.namespace}}"
+        jmesPath: "metadata.labels.exec"
+    preconditions:
+      all:
+      - key: "{{ request.operation }}"
+        operator: Equals
+        value: CONNECT
+    validate:
+      message: Executing a command in a container is forbidden for Pods running in Namespaces protected with the label "exec=false".
+      deny:
+        conditions:
+          any:
+          - key: "{{ nslabelexec }}"
+            operator: Equals
+            value: "false"
+---
+
+
+
